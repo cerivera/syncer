@@ -31,3 +31,4 @@ elif args.command == PUSH:
     print("pushing up synced files")
 elif args.command == DISCONNECT:
     print("disconnecting from syncer")
+

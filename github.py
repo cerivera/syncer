@@ -2,6 +2,7 @@ import requests
 import json
 from constants import *
 
+
 def check_repo_exists(username, repo_name):
     response = requests.get('%s/users/%s/repos' % (GITHUB_API_URL, username))
     json_response = response.json()
@@ -14,6 +15,7 @@ def check_repo_exists(username, repo_name):
             return True
 
     return False
+
 
 def create_public_repo(username, password, repo_name):
     payload = {
@@ -28,3 +30,4 @@ def create_public_repo(username, password, repo_name):
         raise Exception(json_response['message'])
     
     return True
+

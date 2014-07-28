@@ -1,6 +1,7 @@
 import argparse
-import sh
 import github
+import sys
+import getpass
 from path import path
 from constants import *
 
@@ -15,10 +16,14 @@ if path.isdir(syncer_dir):
 else:
 #    path.mkdir(syncer_dir)
     username = input('GitHub username: ')
-    if github.check_repo_exists(username, SYNCER_REPO_NAME):
-        print("GitHub repo exists")
+
+    repo_exists = github.check_repo_exists(username, SYNCER_REPO_NAME)
+
+    if repo_exists:
+        print("Repo exists")
     else:
-        print("Need to create GitHub repo")
+        password = getpass.getpass('GitHub password: ')
+        github.create_public_repo(username, password, SYNCER_REPO_NAME)
 
 if args.command == PULL:
     print("pulling down synced files.")

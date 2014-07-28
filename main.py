@@ -1,3 +1,4 @@
+import sh
 import argparse
 import github
 import sys
@@ -12,23 +13,26 @@ args = parser.parse_args()
 syncer_dir = path.expand(path('~/.syncer'))
 
 if path.isdir(syncer_dir):
-    print("path exists")
+    sh.cd(synced_dir)
+    sh.git('pull', 'origin', 'master')
 else:
-#    path.mkdir(syncer_dir)
     username = input('GitHub username: ')
-
+    password = getpass.getpass('GitHub password: ')
     repo_exists = github.check_repo_exists(username, SYNCER_REPO_NAME)
 
-    if repo_exists:
-        print("Repo exists")
-    else:
-        password = getpass.getpass('GitHub password: ')
+    if not repo_exists:
+        print("Creating new repo in GitHub")
         github.create_public_repo(username, password, SYNCER_REPO_NAME)
+
+    print("Cloning GitHub repo.")
+    sh.git('clone', 'https://%s:%s@github.com/%s/%s.git' % (username, password, username, SYNCER_REPO_NAME), syncer_dir)
 
 if args.command == PULL:
     print("pulling down synced files.")
 elif args.command == PUSH:
     print("pushing up synced files")
 elif args.command == DISCONNECT:
+    #TODO iterate all keys and replace files (if there's a backup)
+    # remove ~/.syncer
     print("disconnecting from syncer")
 

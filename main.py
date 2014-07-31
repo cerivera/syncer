@@ -24,15 +24,14 @@ def ensure_syncer_dir():
     if not repo_exists:
         print("Creating new repo in GitHub")
         github.create_public_repo(username, password, SYNCER_REPO_NAME)
-        # TODO need to create scaffolding for syncer dir (manifest, content/, backups/)
 
     print("Cloning GitHub repo.")
     sh.git('clone', 'https://%s:%s@github.com/%s/%s.git' % (username, password, username, SYNCER_REPO_NAME), syncer_dir)
 
+    needs_commit = False
     sh.cd(syncer_dir)
     if not path.isfile(path('manifest.json')):
-        with open('manifest.json', 'w') as manifest_file:
-            manifest_file.write('{}')
+        sh.touch('manifest.json')
     
     if not path.isdir(path('content')):
         sh.mkdir('content')
@@ -41,22 +40,71 @@ def ensure_syncer_dir():
         sh.mkdir('backup')
 
     if not path.isfile(path('.gitignore')):
+        needs_commit = True
         with open('.gitignore', 'w') as gitignore_file:
             gitignore_file.write('backup')
 
+    if needs_commit:
+        sh.git('add', '-A')
+        sh.git('commit', '-m', 'Setting up scaffolding.')
 
 
 if args.command in PULL:
     ensure_syncer_dir()
-#    sh.cd(syncer_dir)
-#    sh.git('pull', 'origin', 'master')
+    sh.cd(syncer_dir)
+    sh.git('pull', 'origin', 'master')
 
-    
+    with open(path('manifest.json', 'r')) as manifest_file:
+        json_data = json.load(manifest_file) 
+        for key, paths in json_data.items():
+            backup_base_path = syncer_dir + path('/backup/%s' % key)
+            content_base_path = syncer_dir + path('/content/%s' % key)
+
+            if not path.exists(backup_base_path):
+                sh.mkdir(backup_base_path)
+
+            for fs_path in paths:
+                backup_path = backup_base_path + fs_path.replace('~', '.')
+                content_path = content_base_path + fs_path.replace('~', '.')
+
+                # save a backup first
+                if not path.exists(backup_path):
+                    sh.cp('-r', fs_path, backup_path)
+
+                # create symlink from content_path to fs_path
+                sh.ln('-s', content_path, fs_path) 
+
     # TODO iterate manifest and copy files around.  Save backup if nothing in backup for that key
 
 elif args.command == TRACK:
     ensure_syncer_dir()
     sh.cd(syncer_dir)
+
+    key = 'special_config'
+    ps = ['~/.special_config_file']
+
+    json_data = {}
+    with open(path('manifest.json'), 'r') as manifest_file:
+        try:
+            json_data = json.load(manifest_file)
+        except:
+            json_data = {}
+
+    json_data[key] = ps
+    with open(path('manifest.json'), 'w') as manifest_file:
+        manifest_file.write(json.dumps(json_data))
+
+    content_base_path = syncer_dir + path('/content/%s' % key)
+
+    if not path.exists(content_base_path):
+        sh.mkdir(content_base_path)
+
+    for p in ps:
+        content_path = content_base_path + '/' + p.replace('~', '.')
+        sh.cp('-r', path.expand(path(p)), content_path)  
+
+    sh.git('add', '-A')
+    sh.git('commit', '-m', 'Tracking %s' % key)
     # TODO put new key and files in manifest.  copy contents into content and save local backup if nothing there right now. 
     
 elif args.command == UNTRACK:
@@ -73,8 +121,6 @@ elif args.command == PUSH:
         # TODO assuming symlinks
         # If not, we need to copy the code to content and push it back out.  
         sh.cd(syncer_dir)
-        sh.git('add', '*')
-        sh.git('commit', '-am', 'Pushing new config.')
         sh.git('push', 'origin', 'master')
         print("Pushed latest config")
 

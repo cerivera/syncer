@@ -1,3 +1,4 @@
+LIST='list'
 PULL='pull'
 PUSH='push'
 DISCONNECT='disconnect'

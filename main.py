@@ -8,7 +8,9 @@ from path import path
 from constants import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('command', choices=[PULL, PUSH, DISCONNECT, TRACK, UNTRACK])
+parser.add_argument('command', choices=[PULL, PUSH, DISCONNECT, TRACK, UNTRACK, LIST])
+parser.add_argument('-k', '--key')
+parser.add_argument('-f', '--files', nargs="+")
 args = parser.parse_args()
 
 syncer_dir = path.expand(path('~/.syncer'))
@@ -51,10 +53,12 @@ def ensure_syncer_dir():
 
 if args.command in PULL:
     ensure_syncer_dir()
+
     sh.cd(syncer_dir)
+
     sh.git('pull', 'origin', 'master')
 
-    with open(path('manifest.json', 'r')) as manifest_file:
+    with open(path('manifest.json'), 'r') as manifest_file:
         json_data = json.load(manifest_file) 
         for key, paths in json_data.items():
             backup_base_path = syncer_dir + path('/backup/%s' % key)
@@ -63,25 +67,24 @@ if args.command in PULL:
             if not path.exists(backup_base_path):
                 sh.mkdir(backup_base_path)
 
-            for fs_path in paths:
-                backup_path = backup_base_path + fs_path.replace('~', '.')
-                content_path = content_base_path + fs_path.replace('~', '.')
+            for f in paths:
+                f_path = path(f)
+                backup_path = backup_base_path + '/' +  f_path.name
+                content_path = content_base_path + '/' + f_path.name
 
                 # save a backup first
                 if not path.exists(backup_path):
-                    sh.cp('-r', fs_path, backup_path)
+                    sh.cp('-r', path.expand(f_path), backup_path)
 
-                # create symlink from content_path to fs_path
-                sh.ln('-s', content_path, fs_path) 
-
-    # TODO iterate manifest and copy files around.  Save backup if nothing in backup for that key
+                # create symlink from content_path to f_path
+                sh.ln('-s', content_path, path.expand(f_path)) 
 
 elif args.command == TRACK:
+    if not (args.key or args.files):
+        raise Exception("Track is missing key and files")
+
     ensure_syncer_dir()
     sh.cd(syncer_dir)
-
-    key = 'special_config'
-    ps = ['~/.special_config_file']
 
     json_data = {}
     with open(path('manifest.json'), 'r') as manifest_file:
@@ -90,22 +93,21 @@ elif args.command == TRACK:
         except:
             json_data = {}
 
-    json_data[key] = ps
+    json_data[args.key] = args.files
     with open(path('manifest.json'), 'w') as manifest_file:
         manifest_file.write(json.dumps(json_data))
 
-    content_base_path = syncer_dir + path('/content/%s' % key)
+    content_base_path = syncer_dir + path('/content/%s' % args.key)
 
     if not path.exists(content_base_path):
         sh.mkdir(content_base_path)
 
-    for p in ps:
-        content_path = content_base_path + '/' + p.replace('~', '.')
-        sh.cp('-r', path.expand(path(p)), content_path)  
+    for f in args.files:
+        f_path = path(f)
+        sh.cp('-r', path.expand(f_path), content_base_path + '/' + f_path.name)  
 
     sh.git('add', '-A')
-    sh.git('commit', '-m', 'Tracking %s' % key)
-    # TODO put new key and files in manifest.  copy contents into content and save local backup if nothing there right now. 
+    sh.git('commit', '-m', 'Tracking %s' % args.key)
     
 elif args.command == UNTRACK:
     pass
